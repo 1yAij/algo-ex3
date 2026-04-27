@@ -1,0 +1,41 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\begin{document}
+
+\begin{algorithm}[H]
+    \caption{Graph Coloring by Backtracking}
+    \begin{algorithmic}[1]
+    \Require Graph $G=(V,E)$, color number $k$
+    \Ensure Valid coloring or failure
+    \State $color[v]\gets 0$ for all $v\in V$
+    \State $order\gets$ all vertices in selected order
+    \Function{Backtrack}{$i$}
+        \If{$i=|V|$}
+            \State \Return true
+        \EndIf
+        \State $v\gets order[i]$
+        \For{$c=1$ to $k$}
+            \If{\Call{Safe}{$v,c$}}
+                \State $color[v]\gets c$
+                \If{\Call{Backtrack}{$i+1$}}
+                    \State \Return true
+                \EndIf
+                \State $color[v]\gets 0$
+            \EndIf
+        \EndFor
+        \State \Return false
+    \EndFunction
+    \Function{Safe}{$v,c$}
+        \State \Return $\forall u\in Adj(v),\ color[u]\neq c$
+    \EndFunction
+    \State \Return \Call{Backtrack}{$0$}
+    \end{algorithmic}
+    \end{algorithm}
+
+\end{document}

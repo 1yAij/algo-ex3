@@ -1,0 +1,22 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# C++ build outputs
+cpp/graph_coloring
+cpp/test_graph_coloring
+*.o
+*.out
+
+# LaTeX auxiliary files
+algorithm/*.aux
+algorithm/*.fdb_latexmk
+algorithm/*.fls
+algorithm/*.log
+algorithm/*.synctex.gz
+
+# Local editor/cache files
+.vscode/
+.idea/
+.superpowers/
+cpp/output/.cache/

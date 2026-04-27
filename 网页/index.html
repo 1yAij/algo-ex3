@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图着色算法演示</title>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --paper: #ffffff;
+      --ink: #111111;
+      --muted: #555555;
+      --line: #111111;
+      --accent: #0057ff;
+      --danger: #d10000;
+      --warn: #b45309;
+      --success: #008a32;
+      --color-1: #e00000;
+      --color-2: #0057ff;
+      --color-3: #00a63e;
+      --color-4: #ffd400;
+      --color-5: #ff7a00;
+      --color-6: #8f00ff;
+      --font: "Aptos", "Source Sans 3", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: var(--font);
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 3px solid var(--line);
+      border-radius: 14px;
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .top-bar {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+      padding: 18px 24px 12px;
+      background: var(--paper);
+      border-bottom: 3px solid var(--line);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(190px, 1fr));
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .metric {
+      padding: 12px 16px;
+      border: 3px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: clamp(1.8rem, 3vw, 3.8rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .strategy-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      min-width: min(560px, 42vw);
+    }
+
+    .strategy-button {
+      padding: 16px 18px;
+      font-size: clamp(1rem, 1.25vw, 1.35rem);
+      line-height: 1.15;
+      text-align: center;
+    }
+
+    .strategy-button.active {
+      background: var(--ink);
+      color: #ffffff;
+    }
+
+    .stage {
+      min-height: 0;
+      padding: 14px 24px 12px;
+      display: grid;
+    }
+
+    .canvas-shell {
+      min-height: 0;
+      border: 4px solid var(--line);
+      border-radius: 18px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    #graphCanvas {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .bottom-bar {
+      display: grid;
+      grid-template-columns: 220px minmax(260px, 520px) 160px;
+      gap: 18px;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 24px 18px;
+      background: var(--paper);
+      border-top: 3px solid var(--line);
+    }
+
+    .control-button {
+      min-height: 64px;
+      padding: 12px 22px;
+      font-size: 1.35rem;
+    }
+
+    .play-button {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .speed-control {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 12px 16px;
+      border: 3px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+      font-size: 1.2rem;
+      font-weight: 900;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .status-line {
+      position: absolute;
+      left: 42px;
+      bottom: 108px;
+      padding: 10px 14px;
+      border: 3px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.92);
+      font-size: 1.1rem;
+      font-weight: 900;
+      pointer-events: none;
+    }
+
+    @media (max-width: 980px) {
+      .top-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .strategy-switch,
+      .metrics {
+        min-width: 0;
+        grid-template-columns: 1fr;
+      }
+
+      .bottom-bar {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <section class="metrics" aria-label="实时指标">
+      <div class="metric">
+        <span>当前策略</span>
+        <strong id="metricStrategy">基础回溯</strong>
+      </div>
+      <div class="metric">
+        <span>回溯次数</span>
+        <strong id="metricBacktracks">0</strong>
+      </div>
+      <div class="metric">
+        <span>时间</span>
+        <strong id="metricTime">0ms</strong>
+      </div>
+    </section>
+
+    <section class="strategy-switch" aria-label="策略选择">
+      <button id="plainModeBtn" type="button" class="strategy-button active">
+        A 基础回溯
+      </button>
+      <button id="pruningModeBtn" type="button" class="strategy-button">
+        B 回溯 + 剪枝<br>MRV + FC
+      </button>
+    </section>
+  </header>
+
+  <main class="stage">
+    <section class="canvas-shell" aria-label="图着色画布">
+      <div id="graphCanvas"></div>
+    </section>
+    <div id="statusLine" class="status-line">点击“播放”开始演示</div>
+  </main>
+
+  <nav class="bottom-bar" aria-label="播放控制">
+    <button id="playPauseBtn" type="button" class="control-button play-button">播放</button>
+    <label class="speed-control" for="speedRange">
+      <span>速度</span>
+      <input id="speedRange" type="range" min="120" max="1200" step="40" value="520">
+      <span id="speedValue">520ms</span>
+    </label>
+    <button id="resetBtn" type="button" class="control-button">重置</button>
+  </nav>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script>
+    const MAX_STATES = 4000;
+    const APP_COLORS = ['var(--color-1)', 'var(--color-2)', 'var(--color-3)', 'var(--color-4)', 'var(--color-5)', 'var(--color-6)'];
+    const DEMO_GRAPH = {
+      name: 'classroom-demo',
+      nodes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      edges: [
+        [0, 4], [0, 6], [0, 7],
+        [1, 5], [1, 8],
+        [2, 7], [2, 9],
+        [3, 4], [3, 6], [3, 7],
+        [4, 5], [4, 7], [4, 8], [4, 9],
+        [5, 7],
+        [6, 8], [6, 9],
+      ],
+      suggestedColors: 3,
+    };
+
+    const state = {
+      graph: DEMO_GRAPH,
+      mode: 'plain',
+      trace: [],
+      traceIndex: -1,
+      timer: null,
+      speed: 520,
+      startedAt: 0,
+      elapsedBeforePause: 0,
+      network: null,
+      nodesDataSet: null,
+      edgesDataSet: null,
+      degrees: new Map(),
+      positions: new Map(),
+    };
+
+    const ui = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+      bindUi();
+      state.degrees = buildDegreeMap(buildAdjacency(state.graph.nodes, state.graph.edges));
+      state.positions = buildFixedPositions(state.graph);
+      buildNetwork();
+      selectMode('plain');
+    });
+
+    function bindUi() {
+      ui.metricStrategy = document.getElementById('metricStrategy');
+      ui.metricBacktracks = document.getElementById('metricBacktracks');
+      ui.metricTime = document.getElementById('metricTime');
+      ui.statusLine = document.getElementById('statusLine');
+      ui.plainModeBtn = document.getElementById('plainModeBtn');
+      ui.pruningModeBtn = document.getElementById('pruningModeBtn');
+      ui.playPauseBtn = document.getElementById('playPauseBtn');
+      ui.resetBtn = document.getElementById('resetBtn');
+      ui.speedRange = document.getElementById('speedRange');
+      ui.speedValue = document.getElementById('speedValue');
+
+      ui.plainModeBtn.addEventListener('click', () => selectMode('plain'));
+      ui.pruningModeBtn.addEventListener('click', () => selectMode('pruning'));
+      ui.playPauseBtn.addEventListener('click', togglePlayback);
+      ui.resetBtn.addEventListener('click', resetPlayback);
+      ui.speedRange.addEventListener('input', () => {
+        state.speed = Number(ui.speedRange.value);
+        ui.speedValue.textContent = `${state.speed}ms`;
+        if (state.timer !== null) {
+          pausePlayback();
+          startPlayback();
+        }
+      });
+    }
+
+    function selectMode(mode) {
+      pausePlayback();
+      state.mode = mode;
+      ui.plainModeBtn.classList.toggle('active', mode === 'plain');
+      ui.pruningModeBtn.classList.toggle('active', mode === 'pruning');
+      ui.metricStrategy.textContent = mode === 'plain' ? '基础回溯' : '回溯 + 剪枝';
+      buildTrace();
+      resetPlayback();
+    }
+
+    function buildTrace() {
+      const started = performance.now();
+      state.trace = solveGraphColoring(
+        state.graph.nodes,
+        state.graph.edges,
+        state.graph.suggestedColors,
+        {
+          staticDegree: false,
+          mrv: state.mode === 'pruning',
+          forwardChecking: state.mode === 'pruning',
+          maxStates: MAX_STATES,
+        }
+      );
+      state.solveMs = performance.now() - started;
+    }
+
+    function togglePlayback() {
+      if (state.timer === null) {
+        startFromBeginningIfDone();
+        startPlayback();
+      } else {
+        pausePlayback();
+      }
+    }
+
+    function startFromBeginningIfDone() {
+      if (!state.trace.length || state.traceIndex >= state.trace.length - 1) {
+        resetPlayback();
+      }
+    }
+
+    function startPlayback() {
+      if (!state.trace.length) {
+        buildTrace();
+        resetPlayback();
+      }
+      state.startedAt = performance.now();
+      ui.playPauseBtn.textContent = '暂停';
+      state.timer = window.setInterval(() => {
+        updateTimeMetric();
+        if (state.traceIndex >= state.trace.length - 1) {
+          pausePlayback();
+          return;
+        }
+        stepForward();
+      }, state.speed);
+    }
+
+    function pausePlayback() {
+      if (state.timer !== null) {
+        window.clearInterval(state.timer);
+        state.timer = null;
+        state.elapsedBeforePause += performance.now() - state.startedAt;
+      }
+      ui.playPauseBtn.textContent = '播放';
+    }
+
+    function resetPlayback() {
+      pausePlayback();
+      state.traceIndex = 0;
+      state.elapsedBeforePause = 0;
+      state.startedAt = 0;
+      renderGraphSkeleton();
+      if (state.trace.length) {
+        applyState(state.trace[0]);
+      }
+      ui.metricTime.textContent = '0ms';
+      ui.statusLine.textContent = '点击“播放”开始演示';
+      state.network?.fit({ animation: false });
+    }
+
+    function stepForward() {
+      const nextIndex = Math.min(state.trace.length - 1, state.traceIndex + 1);
+      state.traceIndex = nextIndex;
+      applyState(state.trace[nextIndex]);
+      if (nextIndex >= state.trace.length - 1) {
+        pausePlayback();
+        updateTimeMetric();
+      }
+    }
+
+    function updateTimeMetric() {
+      const elapsed = state.timer === null
+        ? state.elapsedBeforePause
+        : state.elapsedBeforePause + performance.now() - state.startedAt;
+      ui.metricTime.textContent = `${Math.round(elapsed)}ms`;
+    }
+
+    function buildNetwork() {
+      state.nodesDataSet = new vis.DataSet();
+      state.edgesDataSet = new vis.DataSet();
+      state.network = new vis.Network(
+        document.getElementById('graphCanvas'),
+        {
+          nodes: state.nodesDataSet,
+          edges: state.edgesDataSet,
+        },
+        {
+          autoResize: true,
+          physics: false,
+          interaction: {
+            dragNodes: false,
+            dragView: false,
+            zoomView: false,
+            hover: false,
+            selectable: false,
+          },
+          nodes: {
+            shape: 'dot',
+            size: 46,
+            borderWidth: 5,
+            font: {
+              face: 'Aptos, PingFang SC, Microsoft YaHei, sans-serif',
+              color: '#111111',
+              size: 30,
+              bold: true,
+              multi: 'html',
+            },
+            color: {
+              background: '#ffffff',
+              border: '#111111',
+              highlight: { background: '#ffffff', border: '#111111' },
+            },
+            shadow: false,
+          },
+          edges: {
+            color: { color: '#111111', highlight: '#111111' },
+            width: 5,
+            smooth: { enabled: false },
+          },
+        }
+      );
+    }
+
+    function renderGraphSkeleton() {
+      const fullDomain = Array.from({ length: state.graph.suggestedColors }, (_, index) => index);
+      const nodes = state.graph.nodes.map((node) => ({
+        id: node,
+        x: state.positions.get(node).x,
+        y: state.positions.get(node).y,
+        fixed: { x: true, y: true },
+        label: `V${node}`,
+        title: `节点 V${node}`,
+        color: {
+          background: '#ffffff',
+          border: '#111111',
+          highlight: { background: '#ffffff', border: '#111111' },
+        },
+        borderWidth: 5,
+      }));
+      const edges = state.graph.edges.map(([source, target]) => ({
+        id: `${source}-${target}`,
+        from: source,
+        to: target,
+        color: { color: '#111111' },
+        width: 5,
+        dashes: false,
+      }));
+      state.nodesDataSet.clear();
+      state.edgesDataSet.clear();
+      state.nodesDataSet.add(nodes);
+      state.edgesDataSet.add(edges);
+    }
+
+    function applyState(step) {
+      if (!step) return;
+      const nodesUpdate = state.graph.nodes.map((node) => {
+        const assignment = step.assignments[node];
+        const isFocused = node === step.focusedNode;
+        const isFailed = node === step.failedNode;
+        const isAssigned = assignment !== null && assignment !== undefined;
+        let background = '#ffffff';
+        let border = '#111111';
+        let borderWidth = 5;
+
+        if (isAssigned) {
+          background = resolveColor(assignment);
+        }
+        if (isFocused) {
+          border = '#0057ff';
+          borderWidth = 8;
+        }
+        if (isFailed || step.actionType === 'REJECT_COLOR') {
+          border = '#d10000';
+          borderWidth = 8;
+        }
+        if (step.actionType === 'BACKTRACKING' && isFocused) {
+          border = '#b45309';
+          borderWidth = 8;
+        }
+        if (step.actionType === 'SOLUTION') {
+          border = '#008a32';
+          borderWidth = 8;
+        }
+
+        return {
+          id: node,
+          label: `V${node}`,
+          color: {
+            background,
+            border,
+            highlight: { background, border },
+          },
+          borderWidth,
+          x: state.positions.get(node).x,
+          y: state.positions.get(node).y,
+          fixed: { x: true, y: true },
+        };
+      });
+
+      const edgesUpdate = state.graph.edges.map(([source, target]) => {
+        const touchesFocused = source === step.focusedNode || target === step.focusedNode;
+        const touchesFailed = step.failedNode !== null && (source === step.failedNode || target === step.failedNode);
+        let color = '#111111';
+        let width = 5;
+        if (touchesFocused) {
+          color = '#0057ff';
+          width = 7;
+        }
+        if (touchesFailed || step.actionType === 'REJECT_COLOR') {
+          color = '#d10000';
+          width = 8;
+        }
+        return {
+          id: `${source}-${target}`,
+          from: source,
+          to: target,
+          color: { color },
+          width,
+          dashes: step.actionType === 'FORWARD_CHECK_FAILED',
+        };
+      });
+
+      state.nodesDataSet.update(nodesUpdate);
+      state.edgesDataSet.update(edgesUpdate);
+      ui.metricBacktracks.textContent = String(step.backtrackCount ?? 0);
+      ui.statusLine.textContent = statusSentence(step);
+    }
+
+    function statusSentence(step) {
+      const node = step.focusedNode === null || step.focusedNode === undefined ? '-' : `V${step.focusedNode}`;
+      const color = step.candidateColor === null || step.candidateColor === undefined ? '-' : step.candidateColor + 1;
+      return `${humanizeAction(step.actionType)}｜节点：${node}｜颜色：${color}`;
+    }
+
+    function resolveColor(index) {
+      return getComputedStyle(document.documentElement).getPropertyValue(`--color-${index + 1}`).trim();
+    }
+
+    function humanizeAction(actionType) {
+      return {
+        READY: '就绪',
+        SELECT_NODE: '选择节点',
+        TRY_COLOR: '尝试颜色',
+        COLORING: '着色',
+        REJECT_COLOR: '冲突剪枝',
+        FORWARD_CHECK: '前向检查',
+        FORWARD_CHECK_FAILED: '剪枝回溯',
+        BACKTRACKING: '回溯',
+        SOLUTION: '完成',
+        FAILURE: '无解',
+      }[actionType] ?? actionType;
+    }
+
+    function buildFixedPositions(graph) {
+      const positions = new Map();
+      const radiusX = 360;
+      const radiusY = 240;
+      graph.nodes.forEach((node, index) => {
+        const angle = (Math.PI * 2 * index) / graph.nodes.length - Math.PI / 2;
+        positions.set(node, {
+          x: Math.cos(angle) * radiusX,
+          y: Math.sin(angle) * radiusY,
+        });
+      });
+      return positions;
+    }
+
+    function solveGraphColoring(nodes, edges, numColors, strategies = {}) {
+      const normalizedNodes = [...nodes].sort((left, right) => left - right);
+      const normalizedEdges = dedupeEdges(edges);
+      const adjacency = buildAdjacency(normalizedNodes, normalizedEdges);
+      const degreeMap = buildDegreeMap(adjacency);
+      const assignments = Object.fromEntries(normalizedNodes.map((node) => [node, null]));
+      const domains = Object.fromEntries(normalizedNodes.map((node) => [
+        node,
+        Array.from({ length: numColors }, (_, index) => index),
+      ]));
+      const staticOrder = [...normalizedNodes].sort((left, right) => degreeMap.get(right) - degreeMap.get(left) || left - right);
+      const trace = [];
+      let visitedCount = 0;
+      let backtrackCount = 0;
+
+      const pushState = ({
+        actionType,
+        focusedNode = null,
+        candidateColor = null,
+        message = '',
+        prunedNodes = [],
+        failedNode = null,
+        depth = 0,
+      }) => {
+        if (trace.length >= (strategies.maxStates ?? MAX_STATES)) {
+          throw new Error('状态过多，建议减小图规模');
+        }
+        trace.push({
+          stepIndex: trace.length,
+          actionType,
+          focusedNode,
+          candidateColor,
+          assignments: Object.fromEntries(Object.entries(assignments)),
+          domains: Object.fromEntries(Object.entries(domains).map(([key, value]) => [key, [...value]])),
+          nodeOrder: getNodeOrder(assignments, domains, staticOrder, degreeMap, strategies),
+          visitedCount,
+          backtrackCount,
+          message,
+          prunedNodes: [...prunedNodes],
+          failedNode,
+          depth,
+        });
+      };
+
+      const search = (depth) => {
+        const nextNode = pickNextNode(assignments, domains, staticOrder, degreeMap, strategies);
+        if (nextNode === null) {
+          pushState({ actionType: 'SOLUTION', depth, message: '所有节点均已成功着色' });
+          return true;
+        }
+
+        pushState({ actionType: 'SELECT_NODE', focusedNode: nextNode, depth, message: `选择节点 ${nextNode}` });
+        visitedCount += 1;
+        const candidateColors = [...domains[nextNode]].sort((left, right) => left - right);
+
+        for (const color of candidateColors) {
+          pushState({
+            actionType: 'TRY_COLOR',
+            focusedNode: nextNode,
+            candidateColor: color,
+            depth,
+            message: `尝试将颜色 ${color + 1} 分配给节点 ${nextNode}`,
+          });
+
+          if (!isColorLegal(nextNode, color, assignments, adjacency)) {
+            pushState({
+              actionType: 'REJECT_COLOR',
+              focusedNode: nextNode,
+              candidateColor: color,
+              depth,
+              message: `颜色 ${color + 1} 与相邻节点冲突`,
+            });
+            continue;
+          }
+
+          assignments[nextNode] = color;
+          const originalDomain = [...domains[nextNode]];
+          domains[nextNode] = [color];
+
+          pushState({
+            actionType: 'COLORING',
+            focusedNode: nextNode,
+            candidateColor: color,
+            depth,
+            message: `节点 ${nextNode} 着色为 ${color + 1}`,
+          });
+
+          let snapshot = null;
+          let failedNode = null;
+          let prunedNodes = [];
+          if (strategies.forwardChecking) {
+            snapshot = Object.fromEntries(Object.entries(domains).map(([key, value]) => [key, [...value]]));
+            const result = applyForwardChecking(nextNode, color, assignments, domains, adjacency);
+            failedNode = result.failedNode;
+            prunedNodes = result.prunedNodes;
+            pushState({
+              actionType: failedNode === null ? 'FORWARD_CHECK' : 'FORWARD_CHECK_FAILED',
+              focusedNode: nextNode,
+              candidateColor: color,
+              depth,
+              prunedNodes,
+              failedNode,
+              message: failedNode === null
+                ? `前向检查更新了 ${prunedNodes.length} 个邻居`
+                : `剩余域为空，回溯：节点 ${failedNode} 无可用颜色`,
+            });
+          }
+
+          if (failedNode === null && search(depth + 1)) {
+            return true;
+          }
+
+          if (snapshot) {
+            for (const [key, value] of Object.entries(snapshot)) {
+              domains[key] = [...value];
+            }
+          }
+          assignments[nextNode] = null;
+          domains[nextNode] = originalDomain;
+          backtrackCount += 1;
+          pushState({
+            actionType: 'BACKTRACKING',
+            focusedNode: nextNode,
+            candidateColor: color,
+            depth,
+            message: `撤销节点 ${nextNode} 的颜色 ${color + 1}`,
+          });
+        }
+
+        return false;
+      };
+
+      if (!search(0)) {
+        pushState({ actionType: 'FAILURE', message: '当前颜色数下无解', depth: 0 });
+      }
+      return trace;
+    }
+
+    function dedupeEdges(edges) {
+      const seen = new Set();
+      const result = [];
+      for (const [rawSource, rawTarget] of edges) {
+        if (rawSource === rawTarget) continue;
+        const source = Math.min(rawSource, rawTarget);
+        const target = Math.max(rawSource, rawTarget);
+        const key = `${source}-${target}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push([source, target]);
+      }
+      return result;
+    }
+
+    function buildAdjacency(nodes, edges) {
+      const adjacency = new Map(nodes.map((node) => [node, new Set()]));
+      for (const [source, target] of edges) {
+        adjacency.get(source).add(target);
+        adjacency.get(target).add(source);
+      }
+      return adjacency;
+    }
+
+    function buildDegreeMap(adjacency) {
+      return new Map([...adjacency.entries()].map(([node, neighbors]) => [node, neighbors.size]));
+    }
+
+    function pickNextNode(assignments, domains, staticOrder, degreeMap, strategies) {
+      const uncolored = Object.keys(assignments)
+        .map(Number)
+        .filter((node) => assignments[node] === null);
+      if (!uncolored.length) return null;
+      if (!strategies.mrv) {
+        if (strategies.staticDegree) return staticOrder.find((node) => assignments[node] === null);
+        return uncolored.sort((left, right) => left - right)[0];
+      }
+      return [...uncolored].sort((left, right) => (
+        domains[left].length - domains[right].length ||
+        (strategies.staticDegree ? degreeMap.get(right) - degreeMap.get(left) : 0) ||
+        left - right
+      ))[0];
+    }
+
+    function getNodeOrder(assignments, domains, staticOrder, degreeMap, strategies) {
+      const uncolored = Object.keys(assignments)
+        .map(Number)
+        .filter((node) => assignments[node] === null);
+      if (!strategies.mrv) {
+        return strategies.staticDegree
+          ? staticOrder.filter((node) => assignments[node] === null)
+          : uncolored.sort((left, right) => left - right);
+      }
+      return [...uncolored].sort((left, right) => (
+        domains[left].length - domains[right].length ||
+        (strategies.staticDegree ? degreeMap.get(right) - degreeMap.get(left) : 0) ||
+        left - right
+      ));
+    }
+
+    function isColorLegal(node, color, assignments, adjacency) {
+      for (const neighbor of adjacency.get(node)) {
+        if (assignments[neighbor] === color) return false;
+      }
+      return true;
+    }
+
+    function applyForwardChecking(node, color, assignments, domains, adjacency) {
+      const prunedNodes = [];
+      let failedNode = null;
+      for (const neighbor of adjacency.get(node)) {
+        if (assignments[neighbor] !== null) continue;
+        const nextDomain = domains[neighbor].filter((candidate) => candidate !== color);
+        if (nextDomain.length !== domains[neighbor].length) {
+          prunedNodes.push(neighbor);
+          domains[neighbor] = nextDomain;
+        }
+        if (!domains[neighbor].length) {
+          failedNode = neighbor;
+          break;
+        }
+      }
+      return { failedNode, prunedNodes };
+    }
+  </script>
+</body>
+</html>
